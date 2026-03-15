@@ -38,18 +38,21 @@ final class WinListViewModel {
         let currentWins = wins
         guard !currentWins.isEmpty else { return }
 
-        let deletions = currentWins.map { api.deleteWin(id: $0.id) }
-
-        Publishers.MergeMany(deletions)
-            .collect()
-            .receive(on: DispatchQueue.main)
-            .sink(receiveCompletion: { [weak self] completion in
-                if case .failure = completion { self?.message = "Clear failed." }
-            }, receiveValue: { [weak self] _ in
-                self?.message = nil
-                self?.wins = []
-            })
-            .store(in: &cancellables)
+        var remaining = currentWins.count
+        for win in currentWins {
+            api.deleteWin(id: win.id)
+                .receive(on: DispatchQueue.main)
+                .sink(receiveCompletion: { [weak self] completion in
+                    if case .failure = completion { self?.message = "Clear failed." }
+                }, receiveValue: { [weak self] _ in
+                    remaining -= 1
+                    if remaining == 0 {
+                        self?.message = nil
+                        self?.wins = []
+                    }
+                })
+                .store(in: &cancellables)
+        }
     }
 
     func timeString(for win: WinRecord) -> String {
